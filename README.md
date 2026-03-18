@@ -37,6 +37,9 @@ A dated markdown report is saved to `audit-results/` every time you run — incl
 **5. Watch your memory files in real-time**
 Run `./monitor.sh start` and get alerted if anything suspicious is written to your agent's memory.
 
+**6. Tap a button, it's handled**
+If a malicious skill is found, you get a Telegram alert with buttons. Tap Remove, Keep, or Restore — your agent handles the rest.
+
 ---
 
 ## The Three Risks You Need to Know About
@@ -77,7 +80,7 @@ Run `install-clawsec.sh` for ClawSec. ghost-scan runs automatically inside `scan
 | `scan-skills.sh` | Static analysis of installed skills (`--all` to include built-ins) + ghost-scan Unicode detection + optional VirusTotal scan |
 | `monitor.sh` | Real-time daemon watching memory files for prompt injection attempts |
 | `install-clawsec.sh` | Installs ClawSec (free, from Prompt Security) |
-| `quarantine.sh` | Manage quarantined skills — list, restore, or permanently delete |
+| `quarantine.sh` | Manage quarantined skills — list, restore, permanently delete, or re-send interactive alert (`notify`) |
 
 | Doc | What It Covers |
 |-----|---------------|
@@ -118,6 +121,26 @@ Every audit ends with a scored summary:
 | 🟡 Good | 70-89 | Solid base, a few things to fix |
 | 🟠 Needs Work | 50-69 | Multiple gaps open, act soon |
 | 🔴 At Risk | < 50 | Significant exposure — run `./harden.sh` now |
+
+---
+
+## Smart Quarantine System
+
+When openclaw-safe detects a malicious skill, it doesn't just warn you — it acts.
+
+**What happens automatically:**
+1. The skill is moved to a safe quarantine folder (never deleted without your permission)
+2. You get a Telegram notification explaining exactly what was found — in plain English
+3. Three buttons let you decide what to do right from your phone:
+
+> **[🗑️ Remove Permanently]   [🔒 Keep Quarantined]   [↩️ Restore]**
+
+**What each button does:**
+- **Remove** — permanently deletes the skill. Use this when you're sure it's malicious.
+- **Keep Quarantined** — leaves it isolated. The skill can't run but you can review it later.
+- **Restore** — puts the skill back. Only do this if you're confident it was a false positive.
+
+Your agent handles the action automatically — no command line needed.
 
 ---
 

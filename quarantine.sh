@@ -27,9 +27,10 @@ usage() {
   log "${BOLD}quarantine.sh — Manage quarantined OpenClaw skills${RESET}"
   log ""
   log "Usage:"
-  log "  ${BOLD}./quarantine.sh list${RESET}               Show all quarantined skills"
-  log "  ${BOLD}./quarantine.sh restore <name>${RESET}     Move a skill back to user skills dir"
-  log "  ${BOLD}./quarantine.sh purge <name>${RESET}       Permanently delete a quarantined skill"
+  log "  ${BOLD}./quarantine.sh list${RESET}                          Show all quarantined skills"
+  log "  ${BOLD}./quarantine.sh restore <name>${RESET}                Move a skill back to user skills dir"
+  log "  ${BOLD}./quarantine.sh purge <name>${RESET}                  Permanently delete a quarantined skill"
+  log "  ${BOLD}./quarantine.sh notify <name> [reason-code]${RESET}   Re-send interactive Telegram alert"
   log ""
 }
 
@@ -210,6 +211,74 @@ cmd_purge() {
   log ""
 }
 
+cmd_notify() {
+  local skill_name="${1:-}"
+  local reason_code="${2:-}"
+
+  if [[ -z "$skill_name" ]]; then
+    log "${RED}Error:${RESET} Please provide a skill name."
+    log "Usage: ./quarantine.sh notify <skill-name> [reason-code]"
+    exit 1
+  fi
+
+  # Map reason codes to plain English
+  local plain_reason
+  case "$reason_code" in
+    hidden-unicode)
+      plain_reason="Hidden invisible characters found in the skill's code — a common technique to hide malicious instructions that look normal to the human eye." ;;
+    eval-external-url)
+      plain_reason="The skill's code downloads and runs code from the internet, which could be used to execute malicious commands on your machine." ;;
+    base64-pipe-shell)
+      plain_reason="The skill decodes hidden data and runs it as a shell command — a technique often used to disguise malicious code." ;;
+    credential-access)
+      plain_reason="The skill attempts to read credential or secret files on your machine." ;;
+    suspicious-curl)
+      plain_reason="The skill makes suspicious network requests that could be sending your data to an external server." ;;
+    "")
+      plain_reason="Suspicious code pattern detected that could pose a security risk." ;;
+    *)
+      plain_reason="Suspicious code pattern detected that could pose a security risk." ;;
+  esac
+
+  local alert_msg
+  alert_msg="🚨 openclaw-safe: Skill Quarantined
+
+Skill: ${skill_name}
+Reason: ${plain_reason}
+
+What would you like to do?"
+
+  local buttons
+  buttons='[[{"text":"🗑️ Remove Permanently","callback_data":"quarantine:purge:'"${skill_name}"'"},{"text":"🔒 Keep Quarantined","callback_data":"quarantine:keep:'"${skill_name}"'"},{"text":"↩️ Restore","callback_data":"quarantine:restore:'"${skill_name}"'"}]]'
+
+  if ! command -v openclaw &>/dev/null; then
+    log "${RED}Error:${RESET} openclaw CLI not found — cannot send notification."
+    exit 1
+  fi
+
+  log ""
+  log "  Sending interactive Telegram alert for: ${BOLD}${skill_name}${RESET}"
+
+  if openclaw message send --channel telegram \
+      --message "$alert_msg" \
+      --buttons "$buttons" 2>/dev/null; then
+    log "  ${GREEN}✅${RESET} Interactive Telegram alert sent (with buttons)"
+  else
+    # Fall back to plain text
+    local plain_msg="🚨 openclaw-safe: Skill Quarantined — ${skill_name}. ${plain_reason} Run: ./quarantine.sh purge ${skill_name} (or restore/list)"
+    if openclaw message send --channel telegram \
+        --message "$plain_msg" 2>/dev/null; then
+      log "  ${GREEN}✅${RESET} Telegram notification sent (plain text fallback)"
+    else
+      log "  ${RED}✗${RESET} Telegram notification failed"
+      log ""
+      log "  ${RED}🚨 ALERT:${RESET} $plain_msg"
+      exit 1
+    fi
+  fi
+  log ""
+}
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 COMMAND="${1:-}"
 
@@ -222,6 +291,9 @@ case "$COMMAND" in
     ;;
   purge)
     cmd_purge "${2:-}"
+    ;;
+  notify)
+    cmd_notify "${2:-}" "${3:-}"
     ;;
   ""|--help|-h)
     usage

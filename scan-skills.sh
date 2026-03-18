@@ -274,16 +274,53 @@ MANIFEST
     fi
   fi
 
-  # Send Telegram notification if openclaw message is available
+  # ─── Telegram interactive notification ────────────────────────────────────
+  # Map reason codes/text to plain English explanations
+  local plain_reason
+  local reason_lower
+  reason_lower=$(echo "$reason" | tr '[:upper:]' '[:lower:]')
+  if echo "$reason_lower" | grep -qE "hidden-unicode|hidden unicode|invisible unicode|unicode payload|ghost-scan"; then
+    plain_reason="Hidden invisible characters found in the skill's code — a common technique to hide malicious instructions that look normal to the human eye."
+  elif echo "$reason_lower" | grep -qE "eval.*external|eval.*url|downloads.*runs"; then
+    plain_reason="The skill's code downloads and runs code from the internet, which could be used to execute malicious commands on your machine."
+  elif echo "$reason_lower" | grep -qE "base64.*pipe|base64.*shell|base64 decode|decode.*shell"; then
+    plain_reason="The skill decodes hidden data and runs it as a shell command — a technique often used to disguise malicious code."
+  elif echo "$reason_lower" | grep -qE "credential|\.ssh|aws_secret|secret file"; then
+    plain_reason="The skill attempts to read credential or secret files on your machine."
+  elif echo "$reason_lower" | grep -qE "curl|wget|suspicious.*network|suspicious.*request|discord.*webhook|slack.*webhook"; then
+    plain_reason="The skill makes suspicious network requests that could be sending your data to an external server."
+  else
+    plain_reason="Suspicious code pattern detected that could pose a security risk."
+  fi
+
+  local alert_msg
+  alert_msg="🚨 openclaw-safe: Skill Quarantined
+
+Skill: ${skill_name}
+Reason: ${plain_reason}
+
+What would you like to do?"
+
+  local buttons
+  buttons='[[{"text":"🗑️ Remove Permanently","callback_data":"quarantine:purge:'"${skill_name}"'"},{"text":"🔒 Keep Quarantined","callback_data":"quarantine:keep:'"${skill_name}"'"},{"text":"↩️ Restore","callback_data":"quarantine:restore:'"${skill_name}"'"}]]'
+
   if command -v openclaw &>/dev/null; then
-    local msg="🚨 openclaw-safe: Malicious skill quarantined — ${skill_name}. Reason: ${reason}. Check ~/.openclaw-safe/quarantine/ for details."
-    if openclaw message --help 2>/dev/null | grep -q "channel" 2>/dev/null; then
-      openclaw message --channel telegram "$msg" 2>/dev/null && \
-        log "  ${GREEN}✅${RESET} Telegram notification sent" || \
-        log "  ${YELLOW}ℹ${RESET}  Telegram notification failed"
+    # Try to send with buttons first
+    if openclaw message send --channel telegram \
+        --message "$alert_msg" \
+        --buttons "$buttons" 2>/dev/null; then
+      log "  ${GREEN}✅${RESET} Telegram interactive alert sent (with buttons)"
     else
-      log ""
-      log "  ${RED}🚨 ALERT:${RESET} $msg"
+      # Fall back to plain text
+      local plain_msg="🚨 openclaw-safe: Skill Quarantined — ${skill_name}. ${plain_reason} Run: ./quarantine.sh purge ${skill_name} (or restore/list)"
+      if openclaw message send --channel telegram \
+          --message "$plain_msg" 2>/dev/null; then
+        log "  ${GREEN}✅${RESET} Telegram notification sent (plain text fallback)"
+      else
+        log "  ${YELLOW}ℹ${RESET}  Telegram notification failed — alert logged below"
+        log ""
+        log "  ${RED}🚨 ALERT:${RESET} $plain_msg"
+      fi
     fi
   else
     log ""
