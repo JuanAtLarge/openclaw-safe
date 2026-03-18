@@ -10,7 +10,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SAFE_DIR="${HOME}/.openclaw-safe"
 OPENCLAW_CONFIG="${HOME}/.openclaw/openclaw.json"
 STATE_FILE="${SAFE_DIR}/wizard-state.json"
-CHAT_ID="YOUR_TELEGRAM_CHAT_ID"
+CHAT_ID=$(python3 -c "
+import json, os
+try:
+    creds = json.load(open(os.path.expanduser('~/.openclaw/credentials/telegram-default-allowFrom.json')))
+    print(creds['allowFrom'][0])
+except:
+    print('')
+" 2>/dev/null || true)
+
+if [[ -z "$CHAT_ID" ]]; then
+    echo "⚠ Could not determine your Telegram chat ID."
+    echo "  Make sure OpenClaw is paired with Telegram, then retry."
+    exit 1
+fi
 
 mkdir -p "$SAFE_DIR"
 

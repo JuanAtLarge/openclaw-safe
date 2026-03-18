@@ -22,6 +22,42 @@ This project fills that gap.
 
 ## How It Works
 
+Run one command:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/JuanAtLarge/openclaw-safe/main/install.sh | bash
+```
+
+If you have Telegram set up with OpenClaw, a setup wizard launches automatically. It walks you through everything with simple yes/no buttons — no terminal commands needed after that.
+
+If you don't have Telegram yet, the scripts still work from the command line.
+
+---
+
+### What the wizard does
+
+**Step 1 — Audit**
+Scans your install and shows your Security Score with a plain-English summary.
+
+**Step 2 — Harden config**
+Finds and fixes risky settings (exec permissions, plugin controls). Backs up your config first.
+
+**Step 3 — Skill scan**
+Checks installed skills for malicious code — including invisible characters the human eye can't see.
+
+**Step 4 — Memory monitor**
+Starts a background watcher for your agent's memory files. Alerts you if anything suspicious is written.
+
+**Step 5 — ClawSec**
+Installs a free real-time security tool that monitors for config tampering and unauthorized network calls.
+
+**Step 6 — Final score**
+Shows your updated Security Score and what was installed.
+
+---
+
+### Command-line usage (no Telegram needed)
+
 **1. Run the one-liner above**
 It clones this repo and immediately runs a full audit of your OpenClaw install.
 

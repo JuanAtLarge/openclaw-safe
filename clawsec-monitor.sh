@@ -21,7 +21,14 @@ STATE_FILE="${DAEMON_DIR}/clawsec-monitor.state"
 ALERTS_FILE="${DAEMON_DIR}/alerts.json"
 QUARANTINE_DIR="${DAEMON_DIR}/quarantine"
 POLL_INTERVAL=30
-CHAT_ID="YOUR_TELEGRAM_CHAT_ID"
+CHAT_ID=$(python3 -c "
+import json, os
+try:
+    creds = json.load(open(os.path.expanduser('~/.openclaw/credentials/telegram-default-allowFrom.json')))
+    print(creds['allowFrom'][0])
+except:
+    print('')
+" 2>/dev/null || true)
 
 # ClawSec log search paths (in priority order)
 CLAWSEC_LOG_CANDIDATES=(

@@ -11,7 +11,7 @@
 set -euo pipefail
 
 REPO="https://github.com/JuanAtLarge/openclaw-safe.git"
-INSTALL_DIR="${OPENCLAW_SAFE_DIR:-${HOME}/.openclaw-safe}"
+INSTALL_DIR="${OPENCLAW_SAFE_DIR:-${HOME}/projects/openclaw-safe}"
 
 # Colors
 RED='\033[0;31m' GREEN='\033[0;32m' YELLOW='\033[1;33m'
@@ -89,6 +89,35 @@ log "  ${BLUE}Report saved to:${RESET} $INSTALL_DIR/audit-results/$(date +%Y-%m-
 log ""
 log "  ${BOLD}Agent-friendly one-liner to re-audit later:${RESET}"
 log "  bash ~/.openclaw-safe/audit.sh"
+log ""
+
+# ─── Check for prior setup completion ────────────────────────────────────────
+SETUP_STATE="${HOME}/.openclaw-safe/setup-complete.json"
+if [[ -f "$SETUP_STATE" ]]; then
+  completed_at=$(python3 -c "import json; d=json.load(open('$SETUP_STATE')); print(d.get('completed_at','unknown'))" 2>/dev/null || echo "unknown")
+  log "${GREEN}✓ openclaw-safe previously set up at $completed_at${RESET}"
+  log "${BLUE}  Run ${BOLD}./audit.sh${RESET}${BLUE} to check your current status.${RESET}"
+  log ""
+  log "${GREEN}✓ openclaw-safe installed at $INSTALL_DIR${RESET}"
+  log ""
+  exit "$AUDIT_EXIT"
+fi
+
+# ─── Launch setup wizard if Telegram is configured ───────────────────────────
+if python3 -c "import json,os; c=json.load(open(os.path.expanduser('~/.openclaw/openclaw.json'))); print(c.get('channels',{}).get('telegram',{}).get('botToken',''))" 2>/dev/null | grep -q .; then
+  log ""
+  log "${GREEN}✅ Telegram detected — launching interactive setup wizard...${RESET}"
+  log "${BLUE}   Check your Telegram for setup prompts.${RESET}"
+  bash "$INSTALL_DIR/setup-wizard.sh"
+else
+  log ""
+  log "${BLUE}ℹ No Telegram configured — run scripts manually:${RESET}"
+  log "  ${GREEN}./harden.sh${RESET}             Apply safe defaults"
+  log "  ${GREEN}./scan-skills.sh${RESET}        Scan installed skills"
+  log "  ${GREEN}./install-clawsec.sh${RESET}    Install ClawSec"
+  log "  ${GREEN}./monitor.sh start${RESET}      Start memory monitor"
+fi
+
 log ""
 log "${GREEN}✓ openclaw-safe installed at $INSTALL_DIR${RESET}"
 log ""

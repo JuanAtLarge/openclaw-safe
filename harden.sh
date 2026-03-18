@@ -20,8 +20,10 @@ DRY_RUN=0
 for arg in "$@"; do [[ "$arg" == "--dry-run" ]] && DRY_RUN=1; done
 
 # Check if we're in an interactive terminal (for prompts)
+# HARDEN_YES=1 env var forces all prompts to auto-accept (wizard/non-interactive mode)
 IS_INTERACTIVE=0
 [[ -t 0 && -t 1 ]] && IS_INTERACTIVE=1
+[[ "${HARDEN_YES:-}" == "1" ]] && IS_INTERACTIVE=2  # special: force-yes mode
 
 CHANGED=0
 SKIPPED=0
@@ -45,6 +47,10 @@ ask_yes_no() {
   if [[ "$IS_INTERACTIVE" == "0" ]]; then
     log "  ${BLUE}[non-interactive]${RESET} Skipping prompt: $prompt"
     return 1
+  fi
+  if [[ "$IS_INTERACTIVE" == "2" ]]; then
+    log "  ${GREEN}[auto-yes]${RESET} $prompt → yes"
+    return 0
   fi
   local answer
   read -rp "$(echo -e "  ${YELLOW}?${RESET} ${prompt} [y/N]: ")" answer
