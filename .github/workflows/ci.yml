@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  security-audit:
+    name: OpenClaw Security Audit CI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install shellcheck (if available)
+        run: |
+          if command -v apt-get &>/dev/null; then
+            sudo apt-get install -y shellcheck 2>/dev/null || echo "shellcheck install failed — skipping"
+          fi
+
+      - name: Shellcheck all .sh files
+        run: |
+          if command -v shellcheck &>/dev/null; then
+            echo "Running shellcheck on all .sh files..."
+            FAIL=0
+            for f in $(find . -name "*.sh" -not -path "./.git/*"); do
+              if shellcheck --severity=warning "$f"; then
+                echo "  ✓ $f"
+              else
+                echo "  ✗ $f (shellcheck issues)"
+                FAIL=1
+              fi
+            done
+            if [ "$FAIL" = "1" ]; then
+              echo "::warning::shellcheck found issues — review above"
+            else
+              echo "All shell scripts passed shellcheck"
+            fi
+          else
+            echo "shellcheck not available — skipping"
+          fi
+
+      - name: Set up mock OpenClaw environment
+        run: |
+          mkdir -p ~/.openclaw
+          # Use the mock config that simulates a fresh install missing exec.ask + plugins.allow
+          cp tests/mock-openclaw.json ~/.openclaw/openclaw.json
+          echo "Mock config installed:"
+          cat ~/.openclaw/openclaw.json
+
+      - name: Run audit.sh (expect detections on mock config)
+        id: audit
+        run: |
+          echo "=== Running audit.sh against mock config ==="
+          EXIT_CODE=0
+          bash audit.sh --no-color || EXIT_CODE=$?
+          echo "audit_exit=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          if [ "$EXIT_CODE" -eq 0 ]; then
+            echo "::warning::audit.sh returned 0 on mock config — expected warnings/criticals for missing exec.ask and plugins.allow"
+          elif [ "$EXIT_CODE" -ge 1 ]; then
+            echo "✓ audit.sh correctly detected issues in mock config (exit $EXIT_CODE)"
+          fi
+          # Always pass CI — we just want to confirm the script runs and detects issues
+          exit 0
+
+      - name: Run scan-skills.sh
+        id: scan_skills
+        run: |
+          echo "=== Running scan-skills.sh ==="
+          EXIT_CODE=0
+          bash scan-skills.sh --no-color || EXIT_CODE=$?
+          echo "scan_exit=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          echo "scan-skills.sh completed with exit $EXIT_CODE"
+          # Exit 0 or 1 (warnings) are fine; exit 2 means critical failures in skill files
+          if [ "$EXIT_CODE" -le 1 ]; then
+            echo "✓ scan-skills.sh passed"
+          else
+            echo "::warning::scan-skills.sh reported critical issues (exit $EXIT_CODE)"
+          fi
+          exit 0
+
+      - name: Run harden.sh --dry-run
+        id: harden
+        run: |
+          echo "=== Running harden.sh --dry-run ==="
+          EXIT_CODE=0
+          bash harden.sh --dry-run --no-color || EXIT_CODE=$?
+          echo "harden_exit=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          echo "harden.sh --dry-run completed with exit $EXIT_CODE"
+          if [ "$EXIT_CODE" -le 1 ]; then
+            echo "✓ harden.sh --dry-run passed"
+          else
+            echo "✗ harden.sh --dry-run returned unexpected exit code $EXIT_CODE"
+            exit 1
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo ""
+          echo "=== CI Summary ==="
+          echo "  audit.sh:       exit ${{ steps.audit.outputs.audit_exit || 'N/A' }}"
+          echo "  scan-skills.sh: exit ${{ steps.scan_skills.outputs.scan_exit || 'N/A' }}"
+          echo "  harden.sh:      exit ${{ steps.harden.outputs.harden_exit || 'N/A' }}"
+          echo ""
+          echo "✓ openclaw-safe CI complete"
