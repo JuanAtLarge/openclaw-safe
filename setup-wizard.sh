@@ -301,9 +301,10 @@ score_emoji() {
 }
 
 count_harden_issues() {
-    local dry_output
-    dry_output=$(bash "$SCRIPT_DIR/harden.sh" --dry-run --no-color 2>&1 || true)
-    echo "$dry_output" | grep -c '→' || echo "0"
+    local dry_output count
+    dry_output=$(bash "$SCRIPT_DIR/harden.sh" --dry-run 2>&1 | sed 's/\x1b\[[0-9;]*m//g' || true)
+    count=$(echo "$dry_output" | grep -c '→' 2>/dev/null) || count=0
+    echo "$count"
 }
 
 # ─── STEP 0: Welcome ─────────────────────────────────────────────────────────
@@ -355,7 +356,12 @@ c_icon="$([[ "$CLAWSEC_INSTALLED" == "1" ]] && echo "✅" || echo "⚠️")"
 s_icon="$([[ "$SKILLS_OK" == "1" ]] && echo "✅" || echo "⚠️")"
 
 # Score emoji
-score_str="${SCORE}/100 $(score_emoji "$SCORE" 2>/dev/null || echo "")"
+if [[ "$SCORE" =~ ^[0-9]+$ ]] && [[ "$SCORE" -ge 90 ]]; then _semoji="🟢 Excellent"
+elif [[ "$SCORE" =~ ^[0-9]+$ ]] && [[ "$SCORE" -ge 75 ]]; then _semoji="🟡 Good"
+elif [[ "$SCORE" =~ ^[0-9]+$ ]] && [[ "$SCORE" -ge 50 ]]; then _semoji="🟠 Fair"
+elif [[ "$SCORE" =~ ^[0-9]+$ ]]; then _semoji="🔴 Needs Work"
+else _semoji=""; fi
+score_str="${SCORE}/100 ${_semoji}"
 
 SUMMARY_MSG="📊 <b>Scan complete! Here's what I found:</b>
 
@@ -504,7 +510,12 @@ sleep 1
 echo "  Running final audit..."
 final_result=$(run_audit_summary)
 FINAL_SCORE="${final_result%%|*}"
-final_score_str="${FINAL_SCORE}/100 $(score_emoji "$FINAL_SCORE" 2>/dev/null || echo "")"
+if [[ "$FINAL_SCORE" =~ ^[0-9]+$ ]] && [[ "$FINAL_SCORE" -ge 90 ]]; then _femoji="🟢 Excellent"
+elif [[ "$FINAL_SCORE" =~ ^[0-9]+$ ]] && [[ "$FINAL_SCORE" -ge 75 ]]; then _femoji="🟡 Good"
+elif [[ "$FINAL_SCORE" =~ ^[0-9]+$ ]] && [[ "$FINAL_SCORE" -ge 50 ]]; then _femoji="🟠 Fair"
+elif [[ "$FINAL_SCORE" =~ ^[0-9]+$ ]]; then _femoji="🔴 Needs Work"
+else _femoji=""; fi
+final_score_str="${FINAL_SCORE}/100 ${_femoji}"
 
 # Build status lines
 h_status="$([[ "$HARDENED" == "true" ]] && echo "✅ Config hardened" || echo "⏭️ Config hardening skipped")"
