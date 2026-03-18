@@ -42,7 +42,7 @@ This is the scary part: **it doesn't have to say "ignore previous instructions."
 
 ✅ **Separate state files per project** — Twitter state, Reddit state, and social state are separate files in `~/projects/`, not in the workspace memory directory.
 
-✅ **Telegram delivery only** — Most crons deliver results to Telegram for the user to review, rather than writing directly to memory.
+✅ **Telegram delivery only** — Most crons deliver results to Telegram for the owner to review, rather than writing directly to memory.
 
 ---
 
