@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+*.env
+secrets/
+*secret*
+*credentials*
+*.key
+*.pem
+*.token
+openclaw.json
+config.json
+*.bak
+.DS_Store
