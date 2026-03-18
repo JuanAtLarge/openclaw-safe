@@ -145,29 +145,73 @@ Your agent handles the action automatically — no command line needed.
 
 ---
 
-## ClawSec Integration
+## ClawSec Integration — Auto-Resolve
 
-[ClawSec](https://github.com/prompt-security/clawsec) is a free tool from Prompt Security (a SentinelOne company) that monitors your OpenClaw agent in real-time.
+[ClawSec](https://github.com/prompt-security/clawsec) is a free tool from Prompt Security that monitors your OpenClaw agent in real-time. openclaw-safe takes it further: when ClawSec catches something, your agent doesn't just alert you — **it investigates and fixes it automatically**, then sends you one button to confirm.
 
-openclaw-safe wraps ClawSec with the same interactive alert system as the quarantine feature — so when ClawSec detects something, you get a plain-English Telegram notification with buttons to resolve it.
+### Config Tampering — You see exactly what changed
 
-**What ClawSec detects:**
-- Your config file changed unexpectedly (possible tampering by a skill or agent)
-- Your agent tried to make a network call it wasn't supposed to (blocked automatically)
+If a skill quietly edits your OpenClaw settings, you get a Telegram message like:
 
-**What you get:**
-A Telegram message like:
-> 🚨 ClawSec Alert: Config Change Detected
-> Your OpenClaw config file was modified unexpectedly at 3:47pm...
-> [🔄 Restore Backup] [👁️ Show Diff] [✅ I Made This Change]
+> 🚨 Your OpenClaw config was modified unexpectedly.
+>
+> Here's what changed:
+> → tools.exec.ask was removed
+> → plugins.allow was changed from ["telegram"] to []
+>
+> This could mean a skill changed your security settings.
+>
+> [🔄 Restore Original] [✅ Keep These Changes]
 
-Tap a button — your agent handles the rest.
+No guessing what changed — it's right there. Tap **Restore Original** and your config is back in seconds. Tap **Keep** and the change is logged as acknowledged.
 
-**To enable:**
+> The restore always saves a backup of the current config first, just in case the "change" was actually intentional.
+
+### Blocked Network Calls — Offending skill found and quarantined
+
+If ClawSec blocks an unauthorized network request, your agent immediately searches all installed skills for anything referencing that URL or domain. If it finds the culprit:
+
+> 🚨 Blocked Network Call
+>
+> ClawSec blocked a request to: evil-server.com/steal-data
+>
+> I investigated and found the source:
+> → Skill: malicious-skill made this call
+>
+> I've quarantined it automatically to protect you.
+>
+> [🗑️ Remove Permanently] [↩️ Restore if False Positive] [📋 View Details]
+
+**The skill is quarantined the moment the call is blocked — no prompt.** Unauthorized network calls are serious. You get one tap to remove it permanently, or restore it if it was a false positive.
+
+If no skill is identified, you still get an alert with options to review your installed skills and the ClawSec log.
+
+### Alert History — Always know what happened
+
+Every alert is logged to `~/.openclaw-safe/alerts.json` with its full history: when it was detected, what happened, and when it was resolved. Nothing is ever deleted — just updated.
+
+Run `bash audit.sh` to see your current security status including open alerts:
+
+```
+═══════════════════════════════════════════════════
+ Alert Status
+═══════════════════════════════════════════════════
+  Open alerts:        0 ✅
+  Resolved (30 days): 2
+  Last alert:         Config Tamper — resolved mar 18 2:31pm
+  Last clean scan:    Wed Mar 18 4:05PM
+
+  Overall Status: SECURE 🟢
+═══════════════════════════════════════════════════
+```
+
+If there are open alerts, they're listed there so you always know your exposure.
+
+### To enable:
 ```bash
 bash install-clawsec.sh
 ```
-That installs ClawSec and starts the monitor automatically.
+That installs ClawSec and starts the auto-resolve monitor automatically.
 
 ---
 

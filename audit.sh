@@ -497,6 +497,83 @@ log "${BOLD}${SCORE_COLOR} Security Score: ${SCORE}/${SCORE_MAX}  ${SCORE_TIER}$
 log "${BOLD}${BLUE}═══════════════════════════════════════════════════${RESET}"
 log ""
 
+# ─── Alert Status Dashboard ───────────────────────────────────────────────────
+ALERTS_FILE="${HOME}/.openclaw-safe/alerts.json"
+
+log "${BOLD}${BLUE}═══════════════════════════════════════════════════${RESET}"
+log "${BOLD} Alert Status${RESET}"
+log "${BOLD}${BLUE}═══════════════════════════════════════════════════${RESET}"
+
+if [[ ! -f "$ALERTS_FILE" ]]; then
+  log "  ℹ  No alerts logged yet — monitors not started"
+  log "     Run: ./clawsec-monitor.sh start"
+else
+  SCAN_TIME=$(date "+%a %b %d %I:%M%p" 2>/dev/null || date)
+  python3 - "${ALERTS_FILE}" "${SCAN_TIME}" << 'PYEOF'
+import json, sys, os
+from datetime import datetime, timezone, timedelta
+
+alerts_file = sys.argv[1]
+scan_time = sys.argv[2]
+
+alerts = []
+try:
+    with open(alerts_file) as f:
+        content = f.read().strip()
+        if content:
+            alerts = json.loads(content)
+    if not isinstance(alerts, list):
+        alerts = []
+except (json.JSONDecodeError, Exception) as e:
+    print(f'  ⚠  alerts.json malformed: {e}')
+    sys.exit(0)
+
+now = datetime.now(timezone.utc)
+thirty_days_ago = now - timedelta(days=30)
+
+open_alerts = [a for a in alerts if a.get('status') == 'open']
+resolved_30 = [a for a in alerts if a.get('status') in ('resolved', 'acknowledged')
+               and a.get('resolvedAt') and
+               datetime.fromisoformat(a['resolvedAt'].replace('Z', '+00:00')) > thirty_days_ago]
+
+open_icon = "✅" if len(open_alerts) == 0 else "🔴"
+print(f'  Open alerts:        {len(open_alerts)} {open_icon}')
+print(f'  Resolved (30 days): {len(resolved_30)}')
+
+if alerts:
+    last = alerts[-1]
+    detected = last.get('detectedAt', '')
+    try:
+        dt = datetime.fromisoformat(detected.replace('Z', '+00:00'))
+        local_dt = dt.astimezone()
+        date_str = local_dt.strftime('%b %-d %-I:%M%p').lower()
+        atype = last.get('type', 'unknown').replace('-', ' ').title()
+        status = last.get('status', 'unknown')
+        print(f'  Last alert:         {atype} — {status} {date_str}')
+    except:
+        print(f'  Last alert:         {last.get("type", "unknown")} — {last.get("status", "unknown")}')
+
+print(f'  Last clean scan:    {scan_time}')
+
+if open_alerts:
+    print()
+    print(f'  🔴 ACTION NEEDED — {len(open_alerts)} open alert(s):')
+    for a in open_alerts:
+        desc = a.get('description', 'No description')[:80]
+        atype = a.get('type', 'unknown').replace('-', ' ').title()
+        print(f'     • [{atype}] {desc}')
+    print()
+    print('  Overall Status: ACTION NEEDED 🔴')
+else:
+    print()
+    print('  Overall Status: SECURE 🟢')
+PYEOF
+  [[ $? -ne 0 ]] && log "  ℹ  Could not parse alerts.json"
+fi
+
+log "${BOLD}${BLUE}═══════════════════════════════════════════════════${RESET}"
+log ""
+
 # ─── Write Report ─────────────────────────────────────────────────────────────
 mkdir -p "$RESULTS_DIR"
 
