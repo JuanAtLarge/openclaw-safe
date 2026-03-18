@@ -22,15 +22,19 @@ This project fills that gap.
 
 ## How It Works
 
-Run one command:
+**Already have an OpenClaw agent with Telegram?** Just tell it:
+
+> *"install openclaw-safe and secure my setup"*
+
+Your agent handles everything. Setup prompts appear in Telegram as yes/no buttons — no terminal needed at all.
+
+**Setting up fresh or prefer the terminal?** Run one command:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/JuanAtLarge/openclaw-safe/main/install.sh | bash
 ```
 
-If you have Telegram set up with OpenClaw, a setup wizard launches automatically. It walks you through everything with simple yes/no buttons — no terminal commands needed after that.
-
-If you don't have Telegram yet, the scripts still work from the command line.
+If Telegram is configured, an interactive setup wizard launches automatically. If not, the scripts work from the command line with the same prompts.
 
 ---
 
