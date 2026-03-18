@@ -1,143 +1,123 @@
 #!/usr/bin/env bash
-# install-clawsec.sh — ClawSec Installer
-# Part of openclaw-safe: https://github.com/JuanAtLarge/openclaw-safe
-#
-# Usage: ./install-clawsec.sh [--no-color]
-# Exit codes: 0=installed, 1=already installed, 2=failed
+# install-clawsec.sh — Install ClawSec security skill suite for OpenClaw
+# ClawSec by Prompt Security (SentinelOne) — https://clawsec.prompt.security
 
 set -euo pipefail
 
-# ─── Colors ──────────────────────────────────────────────────────────────────
-if [[ "${NO_COLOR:-}" == "1" ]] || [[ "${1:-}" == "--no-color" ]]; then
-  RED="" GREEN="" YELLOW="" BLUE="" BOLD="" RESET=""
-else
-  RED='\033[0;31m' GREEN='\033[0;32m' YELLOW='\033[1;33m'
-  BLUE='\033[0;34m' BOLD='\033[1m' RESET='\033[0m'
-fi
+BOLD='\033[1m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+RESET='\033[0m'
 
 CLAWSEC_REPO="https://github.com/prompt-security/clawsec"
-INSTALL_DIR="${HOME}/.clawsec"
+CLAWSEC_DIR="$HOME/.clawsec"
+SKILLS_DIR="$HOME/.openclaw/skills"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-log() { echo -e "$*"; }
+echo -e "${BOLD}╔══════════════════════════════════════════════════╗${RESET}"
+echo -e "${BOLD}║        ClawSec Installer 🦙🔐                    ║${RESET}"
+echo -e "${BOLD}╚══════════════════════════════════════════════════╝${RESET}"
+echo ""
+echo -e "${BLUE}ℹ ClawSec is a security skill suite for OpenClaw${RESET}"
+echo -e "${BLUE}ℹ Built by Prompt Security (a SentinelOne company)${RESET}"
+echo ""
 
-log ""
-log "${BOLD}╔══════════════════════════════════════════════════╗${RESET}"
-log "${BOLD}║        ClawSec Installer 🦙🔐                    ║${RESET}"
-log "${BOLD}╚══════════════════════════════════════════════════╝${RESET}"
-log ""
+# ── Prerequisites ──────────────────────────────────────────────────────────────
+echo -e "${BOLD}Checking prerequisites...${RESET}"
 
-# ─── Check if already installed ──────────────────────────────────────────────
-if command -v clawsec &>/dev/null; then
-  CURRENT_VERSION=$(clawsec --version 2>/dev/null || echo "unknown")
-  log "${GREEN}✓ ClawSec is already installed${RESET} (version: $CURRENT_VERSION)"
-  log "  Location: $(which clawsec)"
-  log ""
-  log "  To update: cd $INSTALL_DIR && git pull && npm install"
-  log "  To scan:   clawsec scan"
-  exit 1
-fi
-
-if [[ -d "$INSTALL_DIR" ]]; then
-  log "${YELLOW}⚠ ClawSec directory exists at $INSTALL_DIR but binary not in PATH${RESET}"
-  log "  Attempting reinstall..."
-fi
-
-# ─── Check prereqs ─────────────────────────────────────────────────────────────
-log "${BLUE}ℹ Checking prerequisites...${RESET}"
-
-if ! command -v git &>/dev/null; then
-  log "${RED}✗ git not found — required for install${RESET}"
-  exit 2
-fi
-log "  ${GREEN}✓${RESET} git available"
-
-if ! command -v node &>/dev/null; then
-  log "${RED}✗ node not found — required for ClawSec${RESET}"
-  exit 2
-fi
-log "  ${GREEN}✓${RESET} node $(node --version) available"
-
-if ! command -v npm &>/dev/null; then
-  log "${RED}✗ npm not found — required for ClawSec${RESET}"
-  exit 2
-fi
-log "  ${GREEN}✓${RESET} npm $(npm --version) available"
-
-# ─── Clone / update ───────────────────────────────────────────────────────────
-log ""
-log "${BLUE}ℹ Installing ClawSec from $CLAWSEC_REPO...${RESET}"
-
-if [[ -d "$INSTALL_DIR/.git" ]]; then
-  log "  Updating existing clone..."
-  cd "$INSTALL_DIR"
-  git pull --quiet
-else
-  log "  Cloning repository..."
-  if ! git clone --quiet "$CLAWSEC_REPO" "$INSTALL_DIR" 2>&1; then
-    log "${RED}✗ Failed to clone $CLAWSEC_REPO${RESET}"
-    log "  Note: The repository may not exist yet or may be private."
-    log "  Check: $CLAWSEC_REPO"
-    log ""
-    log "  ${YELLOW}Alternative:${RESET} Use VirusTotal integration in scan-skills.sh"
-    log "  Set VIRUSTOTAL_API_KEY env var and run: ./scan-skills.sh"
-    exit 2
-  fi
-fi
-
-# ─── Install dependencies ──────────────────────────────────────────────────────
-log ""
-log "${BLUE}ℹ Installing dependencies...${RESET}"
-cd "$INSTALL_DIR"
-
-if [[ -f "package.json" ]]; then
-  npm install --quiet 2>&1 | tail -5
-else
-  log "${YELLOW}⚠ No package.json found — ClawSec may use a different install method${RESET}"
-fi
-
-# ─── Verify install ────────────────────────────────────────────────────────────
-log ""
-log "${BLUE}ℹ Verifying install...${RESET}"
-
-# Try common binary locations
-CLAWSEC_BIN=""
-for candidate in \
-  "$INSTALL_DIR/bin/clawsec" \
-  "$INSTALL_DIR/clawsec" \
-  "$INSTALL_DIR/node_modules/.bin/clawsec"; do
-  if [[ -f "$candidate" ]]; then
-    CLAWSEC_BIN="$candidate"
-    break
-  fi
+MISSING=0
+for cmd in git node npm; do
+    if command -v "$cmd" &>/dev/null; then
+        echo -e "  ${GREEN}✓${RESET} $cmd available"
+    else
+        echo -e "  ${RED}✗${RESET} $cmd not found — required"
+        MISSING=1
+    fi
 done
 
-if [[ -z "$CLAWSEC_BIN" ]]; then
-  log "${RED}✗ ClawSec binary not found after install${RESET}"
-  log "  Check $INSTALL_DIR for the installed files"
-  exit 2
+if [ "$MISSING" -eq 1 ]; then
+    echo -e "\n${RED}✗ Missing required tools. Install them and retry.${RESET}"
+    exit 1
 fi
 
-# Make executable
-chmod +x "$CLAWSEC_BIN"
+# ── Clone or update ClawSec ────────────────────────────────────────────────────
+echo ""
+echo -e "${BOLD}Installing ClawSec...${RESET}"
 
-# Add to PATH suggestion
-log "${GREEN}✓ ClawSec installed at: $CLAWSEC_BIN${RESET}"
-log ""
-log "${YELLOW}Add to PATH:${RESET}"
-log "  echo 'export PATH=\"$INSTALL_DIR/bin:\$PATH\"' >> ~/.zshrc"
-log "  source ~/.zshrc"
-log ""
-log "${GREEN}✓ Install complete!${RESET}"
-log ""
-log "  Usage:"
-log "    clawsec scan              # Scan installed skills"
-log "    clawsec scan --deep       # Full deep scan"
-log "    clawsec report            # View last report"
-log ""
+if [ -d "$CLAWSEC_DIR/.git" ]; then
+    echo -e "  ${BLUE}→${RESET} Updating existing ClawSec install..."
+    cd "$CLAWSEC_DIR" && git pull --quiet
+    echo -e "  ${GREEN}✓${RESET} ClawSec updated"
+else
+    echo -e "  ${BLUE}→${RESET} Cloning ClawSec repository..."
+    git clone --quiet "$CLAWSEC_REPO" "$CLAWSEC_DIR"
+    echo -e "  ${GREEN}✓${RESET} ClawSec cloned"
+fi
+
+# ── Install dependencies ───────────────────────────────────────────────────────
+echo -e "  ${BLUE}→${RESET} Installing dependencies..."
+cd "$CLAWSEC_DIR" && npm install --silent 2>/dev/null || true
+echo -e "  ${GREEN}✓${RESET} Dependencies installed"
+
+# ── Install skills into OpenClaw ───────────────────────────────────────────────
+echo ""
+echo -e "${BOLD}Installing ClawSec skills into OpenClaw...${RESET}"
+
+mkdir -p "$SKILLS_DIR"
+
+SKILLS_INSTALLED=0
+if [ -d "$CLAWSEC_DIR/skills" ]; then
+    for skill_dir in "$CLAWSEC_DIR/skills"/*/; do
+        skill_name=$(basename "$skill_dir")
+        target="$SKILLS_DIR/$skill_name"
+        if [ -d "$target" ]; then
+            echo -e "  ${BLUE}→ SKIP${RESET}    $skill_name (already installed)"
+        else
+            cp -r "$skill_dir" "$target"
+            echo -e "  ${GREEN}✓ INSTALLED${RESET} $skill_name"
+            SKILLS_INSTALLED=$((SKILLS_INSTALLED + 1))
+        fi
+    done
+    echo -e "\n  ${GREEN}✓${RESET} $SKILLS_INSTALLED skill(s) installed to $SKILLS_DIR"
+else
+    echo -e "  ${YELLOW}⚠${RESET} No skills directory found in ClawSec repo"
+fi
+
+# ── Summary ────────────────────────────────────────────────────────────────────
+echo ""
+echo -e "${BLUE}═══════════════════════════════════════════════════${RESET}"
+echo -e "${BOLD} ClawSec Install Summary${RESET}"
+echo -e "${BLUE}═══════════════════════════════════════════════════${RESET}"
+echo ""
+echo -e "  ${GREEN}✓${RESET} ClawSec installed to: $CLAWSEC_DIR"
+echo -e "  ${GREEN}✓${RESET} Skills installed to:   $SKILLS_DIR"
+echo ""
+echo -e "  ${BOLD}Available ClawSec skills:${RESET}"
+if [ -d "$CLAWSEC_DIR/skills" ]; then
+    for skill_dir in "$CLAWSEC_DIR/skills"/*/; do
+        skill_name=$(basename "$skill_dir")
+        desc=""
+        if [ -f "$skill_dir/SKILL.md" ]; then
+            desc=$(grep "^description:" "$skill_dir/SKILL.md" 2>/dev/null | head -1 | sed 's/description: //' | cut -c1-60)
+        fi
+        echo -e "    ${BLUE}→${RESET} $skill_name${desc:+ — $desc}"
+    done
+fi
+echo ""
+echo -e "  ${BOLD}Next steps:${RESET}"
+echo -e "  1. Restart OpenClaw for skills to load: openclaw gateway restart"
+echo -e "  2. Start the ClawSec monitor: ${BOLD}./clawsec-monitor.sh start${RESET}"
+echo -e "  3. Run a full audit: ${BOLD}bash audit.sh${RESET}"
+echo ""
+
+# ── Start clawsec-monitor ──────────────────────────────────────────────────────
+if [ -f "$SCRIPT_DIR/clawsec-monitor.sh" ]; then
+    echo -e "${BLUE}→${RESET} Starting ClawSec monitor..."
+    bash "$SCRIPT_DIR/clawsec-monitor.sh" start
+    echo -e "${GREEN}✓${RESET} ClawSec monitor running — you'll get Telegram alerts for security events"
+fi
 
 echo ""
-echo "Starting ClawSec monitor..."
-bash "$(dirname "$0")/clawsec-monitor.sh" start
-echo "✅ ClawSec monitor running — you'll get Telegram alerts for any security events"
-
-exit 0
+echo -e "${GREEN}${BOLD}✓ ClawSec installation complete!${RESET}"
