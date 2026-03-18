@@ -135,4 +135,9 @@ log "    clawsec scan --deep       # Full deep scan"
 log "    clawsec report            # View last report"
 log ""
 
+echo ""
+echo "Starting ClawSec monitor..."
+bash "$(dirname "$0")/clawsec-monitor.sh" start
+echo "✅ ClawSec monitor running — you'll get Telegram alerts for any security events"
+
 exit 0

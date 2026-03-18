@@ -79,7 +79,8 @@ Run `install-clawsec.sh` for ClawSec. ghost-scan runs automatically inside `scan
 | `harden.sh` | Applies safe defaults automatically (with confirmation + backup) |
 | `scan-skills.sh` | Static analysis of installed skills (`--all` to include built-ins) + ghost-scan Unicode detection + optional VirusTotal scan |
 | `monitor.sh` | Real-time daemon watching memory files for prompt injection attempts |
-| `install-clawsec.sh` | Installs ClawSec (free, from Prompt Security) |
+| `install-clawsec.sh` | Installs ClawSec (free, from Prompt Security) + starts the monitor |
+| `clawsec-monitor.sh` | Daemon that watches ClawSec logs and fires Telegram alerts with action buttons |
 | `quarantine.sh` | Manage quarantined skills — list, restore, permanently delete, or re-send interactive alert (`notify`) |
 
 | Doc | What It Covers |
@@ -141,6 +142,32 @@ When openclaw-safe detects a malicious skill, it doesn't just warn you — it ac
 - **Restore** — puts the skill back. Only do this if you're confident it was a false positive.
 
 Your agent handles the action automatically — no command line needed.
+
+---
+
+## ClawSec Integration
+
+[ClawSec](https://github.com/prompt-security/clawsec) is a free tool from Prompt Security (a SentinelOne company) that monitors your OpenClaw agent in real-time.
+
+openclaw-safe wraps ClawSec with the same interactive alert system as the quarantine feature — so when ClawSec detects something, you get a plain-English Telegram notification with buttons to resolve it.
+
+**What ClawSec detects:**
+- Your config file changed unexpectedly (possible tampering by a skill or agent)
+- Your agent tried to make a network call it wasn't supposed to (blocked automatically)
+
+**What you get:**
+A Telegram message like:
+> 🚨 ClawSec Alert: Config Change Detected
+> Your OpenClaw config file was modified unexpectedly at 3:47pm...
+> [🔄 Restore Backup] [👁️ Show Diff] [✅ I Made This Change]
+
+Tap a button — your agent handles the rest.
+
+**To enable:**
+```bash
+bash install-clawsec.sh
+```
+That installs ClawSec and starts the monitor automatically.
 
 ---
 
