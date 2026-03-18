@@ -125,6 +125,8 @@ Run `install-clawsec.sh` for ClawSec. ghost-scan runs automatically inside `scan
 | `install-clawsec.sh` | Installs ClawSec (free, from Prompt Security) + starts the monitor |
 | `clawsec-monitor.sh` | Daemon that watches ClawSec logs and fires Telegram alerts with action buttons |
 | `quarantine.sh` | Manage quarantined skills — list, restore, permanently delete, or re-send interactive alert (`notify`) |
+| `setup-wizard.sh` | Interactive setup wizard — Telegram buttons or terminal prompts, walks through all steps |
+| `skill/SKILL.md` | OpenClaw skill — install once, then just tell your agent *"secure my OpenClaw"* |
 
 | Doc | What It Covers |
 |-----|---------------|
@@ -286,7 +288,7 @@ Prompt injection attacks often target your agent's memory files. `monitor.sh` wa
 ## What harden.sh Fixes Automatically
 
 - Sets `plugins.allow` to your currently loaded plugins
-- Sets `exec.ask = allowlist` (agents must get approval before running shell commands)
+- Sets `exec.ask = on-miss` (agents must get approval before running unfamiliar shell commands)
 - Fixes config file permissions to 600
 - Backs up your config before making any change
 - Prompts to restart OpenClaw when done
