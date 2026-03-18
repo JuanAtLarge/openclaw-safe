@@ -130,15 +130,16 @@ print(v if v else 'null')
 " 2>/dev/null || echo "null")
 
 if [[ "$EXEC_ASK" == "null" ]]; then
-  warn "exec.ask not explicitly configured (defaults may allow unapproved shell commands)"
-  warn "Consider: tools.exec.ask = 'allowlist' or 'always'"
+  warn "exec.ask not configured — agents can run shell commands without approval"
+  warn "Run ./harden.sh to fix automatically"
 else
   case "$EXEC_ASK" in
     deny)      pass "exec.ask = deny (most restrictive — shell exec blocked)" ;;
     allowlist) pass "exec.ask = allowlist (approved commands only)" ;;
     always)    pass "exec.ask = always (prompts for every exec)" ;;
+    ask)       pass "exec.ask = ask (prompts before running)" ;;
     on-miss)   warn "exec.ask = on-miss (only prompts for unapproved commands)" ;;
-    off)       crit "exec.ask = off (no approval required for shell execution!)" ;;
+    off)       crit "exec.ask = off (no approval required for shell execution!) — Run ./harden.sh to fix" ;;
     *)         warn "exec.ask = $EXEC_ASK (unknown value — review manually)" ;;
   esac
 fi

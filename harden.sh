@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# harden.sh — OpenClaw One-Shot Hardener
+# harden.sh — OpenClaw One-Shot Hardener v2
 # Part of openclaw-safe: https://github.com/JuanAtLarge/openclaw-safe
 #
 # Usage: ./harden.sh [--dry-run] [--no-color]
@@ -19,18 +19,37 @@ fi
 DRY_RUN=0
 for arg in "$@"; do [[ "$arg" == "--dry-run" ]] && DRY_RUN=1; done
 
+# Check if we're in an interactive terminal (for prompts)
+IS_INTERACTIVE=0
+[[ -t 0 && -t 1 ]] && IS_INTERACTIVE=1
+
 CHANGED=0
 SKIPPED=0
 ERRORS=0
+CONFIG_CHANGED=0
 
-OPENCLAW_CONFIG="${HOME}/.openclaw/openclaw.json"
+OPENCLAW_CONFIG="${OPENCLAW_CONFIG:-${HOME}/.openclaw/openclaw.json}"
 BACKUP_FILE="${OPENCLAW_CONFIG}.backup.$(date +%Y%m%d-%H%M%S)"
 
-log() { echo -e "$*"; }
-changed() { log "  ${GREEN}✓ CHANGED${RESET} $*"; CHANGED=$((CHANGED+1)); }
+log()     { echo -e "$*"; }
+ok()      { log "  ${GREEN}✓${RESET} $*"; }
+changed() { log "  ${GREEN}✓ CHANGED${RESET} $*"; CHANGED=$((CHANGED+1)); CONFIG_CHANGED=$((CONFIG_CHANGED+1)); }
 skipped() { log "  ${BLUE}→ SKIP${RESET}    $*"; SKIPPED=$((SKIPPED+1)); }
-suggest() { log "  ${YELLOW}⚠ SUGGEST${RESET} $*"; }
-err() { log "  ${RED}✗ ERROR${RESET}   $*"; ERRORS=$((ERRORS+1)); }
+warn()    { log "  ${YELLOW}⚠${RESET} $*"; }
+err()     { log "  ${RED}✗ ERROR${RESET}   $*"; ERRORS=$((ERRORS+1)); }
+
+# ─── Prompt helper ────────────────────────────────────────────────────────────
+# Returns 0 (yes) or 1 (no). Auto-skips (returns 1) in non-interactive mode.
+ask_yes_no() {
+  local prompt="$1"
+  if [[ "$IS_INTERACTIVE" == "0" ]]; then
+    log "  ${BLUE}[non-interactive]${RESET} Skipping prompt: $prompt"
+    return 1
+  fi
+  local answer
+  read -rp "$(echo -e "  ${YELLOW}?${RESET} ${prompt} [y/N]: ")" answer
+  [[ "${answer,,}" == "y" || "${answer,,}" == "yes" ]]
+}
 
 # ─── Header ───────────────────────────────────────────────────────────────────
 log ""
@@ -51,43 +70,17 @@ if ! command -v python3 &>/dev/null; then
   exit 2
 fi
 
-# ─── Backup ───────────────────────────────────────────────────────────────────
-log "${BOLD}Step 1: Backup${RESET}"
-if [[ "$DRY_RUN" == "0" ]]; then
-  cp "$OPENCLAW_CONFIG" "$BACKUP_FILE"
-  log "  Backup saved: $BACKUP_FILE"
-else
-  log "  ${BLUE}[dry-run]${RESET} Would backup to: $BACKUP_FILE"
-fi
+# ─── Phase 1: SCAN ────────────────────────────────────────────────────────────
+# Collect issues without applying. We'll confirm and apply after showing summary.
 
-# ─── Parse current config ─────────────────────────────────────────────────────
-CURRENT_CONFIG=$(cat "$OPENCLAW_CONFIG")
-
-# Helper: check if jq available, otherwise use python3
-json_get() {
-  if command -v jq &>/dev/null; then
-    echo "$CURRENT_CONFIG" | jq -r "$1" 2>/dev/null
-  else
-    python3 -c "
-import json, sys
-d = json.loads('''$CURRENT_CONFIG''')
-# Basic path resolver
-try:
-    keys = '$1'.lstrip('.').split('.')
-    v = d
-    for k in keys:
-        v = v.get(k) if isinstance(v, dict) else None
-        if v is None: break
-    print(v if v is not None else 'null')
-except: print('null')
-" 2>/dev/null
-  fi
-}
-
-# ─── Harden: plugins.allow ────────────────────────────────────────────────────
+log "${BOLD}Scanning your OpenClaw install...${RESET}"
 log ""
-log "${BOLD}Step 2: Plugin Allow-List${RESET}"
 
+# Track pending fixes as parallel arrays (bash 3 compat, no associative arrays)
+FIX_NAMES=()
+FIX_DESCS=()
+
+# ─── Scan: plugins.allow ──────────────────────────────────────────────────────
 PLUGINS_ALLOW=$(python3 -c "
 import json
 with open('$OPENCLAW_CONFIG') as f: d = json.load(f)
@@ -106,53 +99,20 @@ print(json.dumps(all_plugins))
 
 if [[ "$PLUGINS_ALLOW" == "[]" || "$PLUGINS_ALLOW" == "null" ]]; then
   if [[ "$LOADED_PLUGINS" != "[]" && "$LOADED_PLUGINS" != "null" ]]; then
-    log "  plugins.allow is empty — setting to currently installed plugins: $LOADED_PLUGINS"
-    if [[ "$DRY_RUN" == "0" ]]; then
-      python3 << PYEOF
-import json
-with open('$OPENCLAW_CONFIG') as f: d = json.load(f)
-loaded = $LOADED_PLUGINS
-if 'plugins' not in d: d['plugins'] = {}
-d['plugins']['allow'] = loaded
-with open('$OPENCLAW_CONFIG', 'w') as f: json.dump(d, f, indent=4)
-print("  Applied.")
-PYEOF
-      changed "Set plugins.allow to: $LOADED_PLUGINS"
-    else
-      log "  ${BLUE}[dry-run]${RESET} Would set plugins.allow = $LOADED_PLUGINS"
-      CHANGED=$((CHANGED+1))
-    fi
-  else
-    suggest "plugins.allow is empty and no plugins detected — add plugins manually after installing them"
-  fi
-else
-  skipped "plugins.allow already set: $PLUGINS_ALLOW"
-fi
-
-# ─── Harden: File permissions ──────────────────────────────────────────────────
-log ""
-log "${BOLD}Step 3: Config File Permissions${RESET}"
-
-CONFIG_PERMS=$(stat -f "%A" "$OPENCLAW_CONFIG" 2>/dev/null || stat -c "%a" "$OPENCLAW_CONFIG" 2>/dev/null || echo "unknown")
-
-if [[ "$CONFIG_PERMS" == "unknown" ]]; then
-  suggest "Could not check file permissions — manually verify: ls -la $OPENCLAW_CONFIG"
-elif [[ "$CONFIG_PERMS" == "600" ]]; then
-  skipped "openclaw.json already has secure permissions (600)"
-else
-  if [[ "$DRY_RUN" == "0" ]]; then
-    chmod 600 "$OPENCLAW_CONFIG"
-    changed "Set openclaw.json permissions to 600 (was: $CONFIG_PERMS)"
-  else
-    log "  ${BLUE}[dry-run]${RESET} Would chmod 600 $OPENCLAW_CONFIG (currently: $CONFIG_PERMS)"
-    CHANGED=$((CHANGED+1))
+    FIX_NAMES+=("plugins_allow")
+    FIX_DESCS+=("Set plugins.allow to currently installed plugins: $LOADED_PLUGINS")
   fi
 fi
 
-# ─── Check: exec approval settings ────────────────────────────────────────────
-log ""
-log "${BOLD}Step 4: Exec Approval Settings${RESET}"
+# ─── Scan: file permissions ────────────────────────────────────────────────────
+CONFIG_PERMS=$(stat -f "%OLp" "$OPENCLAW_CONFIG" 2>/dev/null || stat -c "%a" "$OPENCLAW_CONFIG" 2>/dev/null || echo "unknown")
 
+if [[ "$CONFIG_PERMS" != "unknown" && "$CONFIG_PERMS" != "600" ]]; then
+  FIX_NAMES+=("file_perms")
+  FIX_DESCS+=("Set openclaw.json permissions to 600 (currently: $CONFIG_PERMS)")
+fi
+
+# ─── Scan: exec.ask ───────────────────────────────────────────────────────────
 EXEC_ASK=$(python3 -c "
 import json
 with open('$OPENCLAW_CONFIG') as f: d = json.load(f)
@@ -160,31 +120,18 @@ v = d.get('tools', {}).get('exec', {}).get('ask') or d.get('exec', {}).get('ask'
 print(v if v else 'null')
 " 2>/dev/null || echo "null")
 
+EXEC_ASK_NEEDS_FIX=0
 if [[ "$EXEC_ASK" == "null" ]]; then
-  suggest "exec.ask not set — recommended: set tools.exec.ask = 'allowlist' in openclaw.json"
-  suggest "This prevents agents from running unapproved shell commands"
-  suggest "Add to openclaw.json:"
-  suggest '  "tools": { "exec": { "ask": "allowlist" } }'
-  log ""
-  log "  ${YELLOW}Note:${RESET} Cannot safely auto-apply exec settings without knowing your current workflow."
-  log "  Add the above manually after reviewing which exec commands you need to allow."
+  EXEC_ASK_NEEDS_FIX=1
+  FIX_NAMES+=("exec_ask")
+  FIX_DESCS+=("Set tools.exec.ask = 'allowlist' (currently not configured — agents can run any shell command!)")
 elif [[ "$EXEC_ASK" == "off" ]]; then
-  suggest "exec.ask = off — this is unsafe! Change to 'allowlist' or 'always'"
-  skipped "Not auto-changing exec settings — review manually"
-else
-  skipped "exec.ask = $EXEC_ASK (review if this matches your intent)"
+  EXEC_ASK_NEEDS_FIX=1
+  FIX_NAMES+=("exec_ask")
+  FIX_DESCS+=("Change tools.exec.ask from 'off' to 'allowlist' (off = zero shell approval!)")
 fi
 
-# ─── Check: Gateway ────────────────────────────────────────────────────────────
-log ""
-log "${BOLD}Step 5: Gateway Security${RESET}"
-
-GATEWAY_MODE=$(python3 -c "
-import json
-with open('$OPENCLAW_CONFIG') as f: d = json.load(f)
-print(d.get('gateway', {}).get('mode', 'null'))
-" 2>/dev/null || echo "null")
-
+# ─── Scan: gateway binding ────────────────────────────────────────────────────
 GATEWAY_BIND=$(python3 -c "
 import json
 with open('$OPENCLAW_CONFIG') as f: d = json.load(f)
@@ -192,40 +139,165 @@ print(d.get('gateway', {}).get('bind', 'null'))
 " 2>/dev/null || echo "null")
 
 if [[ "$GATEWAY_BIND" == "0.0.0.0" ]]; then
-  if [[ "$DRY_RUN" == "0" ]]; then
-    python3 << PYEOF
+  FIX_NAMES+=("gateway_bind")
+  FIX_DESCS+=("Set gateway.bind to 127.0.0.1 (currently exposed on ALL network interfaces!)")
+fi
+
+# ─── Phase 2: SHOW FINDINGS ───────────────────────────────────────────────────
+
+NUM_FIXES=${#FIX_NAMES[@]}
+
+if [[ "$NUM_FIXES" -eq 0 ]]; then
+  log "${GREEN}${BOLD}✓ Nothing to fix — your config looks good!${RESET}"
+  log ""
+  log "  Run ${BOLD}./audit.sh${RESET} for a full security report."
+  log ""
+  exit 0
+fi
+
+# Show exec.ask warning prominently if present
+if [[ "$EXEC_ASK_NEEDS_FIX" == "1" ]]; then
+  log "${YELLOW}⚠ exec.ask not configured — this lets agents run shell commands without approval${RESET}"
+  log ""
+fi
+
+log "${BOLD}Found $NUM_FIXES thing(s) to fix:${RESET}"
+log ""
+for i in "${!FIX_NAMES[@]}"; do
+  log "  ${YELLOW}[$((i+1))]${RESET} ${FIX_DESCS[$i]}"
+done
+log ""
+
+# ─── Dry-run mode: show and exit ──────────────────────────────────────────────
+if [[ "$DRY_RUN" == "1" ]]; then
+  log "${BOLD}${BLUE}═══════════════════════════════════════════════════${RESET}"
+  log "${BOLD} Dry Run Summary${RESET}"
+  log "${BOLD}${BLUE}═══════════════════════════════════════════════════${RESET}"
+  log ""
+  log "  ${BLUE}[dry-run]${RESET} $NUM_FIXES change(s) would be applied:"
+  for desc in "${FIX_DESCS[@]}"; do
+    log "    ${BLUE}→${RESET} $desc"
+  done
+  log ""
+  # Show exec.ask specifically
+  if [[ "$EXEC_ASK_NEEDS_FIX" == "1" ]]; then
+    log "  ${BLUE}[dry-run]${RESET} Would add to openclaw.json:"
+    log '    "tools": { "exec": { "ask": "allowlist" } }'
+    log ""
+  fi
+  log "  Run ${BOLD}./harden.sh${RESET} (without --dry-run) to apply."
+  log ""
+  exit 0
+fi
+
+# ─── Phase 3: CONFIRM ─────────────────────────────────────────────────────────
+if ! ask_yes_no "Apply all fixes?"; then
+  log ""
+  log "${BOLD}No changes applied. Here's what to do manually:${RESET}"
+  log ""
+  for desc in "${FIX_DESCS[@]}"; do
+    log "  ${YELLOW}→${RESET} $desc"
+  done
+  log ""
+  log "  Or just run ${BOLD}./harden.sh${RESET} again when you're ready."
+  log ""
+  exit 0
+fi
+
+log ""
+
+# ─── Phase 4: BACKUP ──────────────────────────────────────────────────────────
+log "${BOLD}Backing up config...${RESET}"
+cp "$OPENCLAW_CONFIG" "$BACKUP_FILE"
+ok "Backup saved: $BACKUP_FILE"
+log ""
+
+# ─── Phase 5: APPLY ───────────────────────────────────────────────────────────
+log "${BOLD}Applying fixes...${RESET}"
+log ""
+
+for fix_name in "${FIX_NAMES[@]}"; do
+
+  case "$fix_name" in
+
+    plugins_allow)
+      log "  ${BLUE}[1/1]${RESET} Setting plugins.allow..."
+      python3 << PYEOF
+import json
+with open('$OPENCLAW_CONFIG') as f: d = json.load(f)
+loaded = $LOADED_PLUGINS
+if 'plugins' not in d: d['plugins'] = {}
+d['plugins']['allow'] = loaded
+with open('$OPENCLAW_CONFIG', 'w') as f: json.dump(d, f, indent=4)
+PYEOF
+      changed "plugins.allow set to: $LOADED_PLUGINS"
+      ;;
+
+    file_perms)
+      chmod 600 "$OPENCLAW_CONFIG"
+      changed "openclaw.json permissions set to 600 (was: $CONFIG_PERMS)"
+      ;;
+
+    exec_ask)
+      log "  Setting tools.exec.ask..."
+      python3 << PYEOF
+import json
+with open('$OPENCLAW_CONFIG') as f: d = json.load(f)
+if 'tools' not in d: d['tools'] = {}
+if 'exec' not in d['tools']: d['tools']['exec'] = {}
+d['tools']['exec']['ask'] = 'allowlist'
+with open('$OPENCLAW_CONFIG', 'w') as f: json.dump(d, f, indent=4)
+PYEOF
+      ok "✅ exec.ask set to allowlist"
+      CHANGED=$((CHANGED+1))
+      CONFIG_CHANGED=$((CONFIG_CHANGED+1))
+      ;;
+
+    gateway_bind)
+      python3 << PYEOF
 import json
 with open('$OPENCLAW_CONFIG') as f: d = json.load(f)
 d.setdefault('gateway', {})['bind'] = '127.0.0.1'
 with open('$OPENCLAW_CONFIG', 'w') as f: json.dump(d, f, indent=4)
 PYEOF
-    changed "Set gateway.bind from 0.0.0.0 to 127.0.0.1"
+      changed "gateway.bind set to 127.0.0.1 (was: 0.0.0.0)"
+      ;;
+
+  esac
+done
+
+# ─── Phase 6: SUMMARY ─────────────────────────────────────────────────────────
+log ""
+log "${BOLD}${BLUE}═══════════════════════════════════════════════════${RESET}"
+log "${BOLD} Hardening Complete${RESET}"
+log "${BOLD}${BLUE}═══════════════════════════════════════════════════${RESET}"
+log ""
+log "  ${GREEN}✓${RESET} $CHANGED fix(es) applied"
+log "  ${BLUE}→${RESET} $SKIPPED setting(s) already OK"
+[[ "$ERRORS" -gt 0 ]] && log "  ${RED}✗${RESET} $ERRORS error(s)"
+[[ "$CHANGED" -gt 0 ]] && log "  Backup saved at: $BACKUP_FILE"
+log ""
+
+# ─── Phase 7: RESTART PROMPT ──────────────────────────────────────────────────
+if [[ "$CONFIG_CHANGED" -gt 0 ]]; then
+  log "  Config updated."
+  if ask_yes_no "Restart OpenClaw to apply changes?"; then
+    log ""
+    log "  Restarting OpenClaw..."
+    if openclaw gateway restart; then
+      ok "OpenClaw restarted successfully"
+    else
+      warn "Restart command failed — try: openclaw gateway restart"
+    fi
   else
-    log "  ${BLUE}[dry-run]${RESET} Would set gateway.bind = 127.0.0.1 (currently: 0.0.0.0)"
-    CHANGED=$((CHANGED+1))
+    log ""
+    log "  ${YELLOW}Remember to restart OpenClaw manually:${RESET}"
+    log "    openclaw gateway restart"
   fi
-else
-  skipped "Gateway bind = ${GATEWAY_BIND} (OK)"
 fi
 
-# ─── Summary ──────────────────────────────────────────────────────────────────
 log ""
-log "${BOLD}${BLUE}═══════════════════════════════════════════════════${RESET}"
-log "${BOLD} Hardening Summary${RESET}"
-log "${BOLD}${BLUE}═══════════════════════════════════════════════════${RESET}"
-if [[ "$DRY_RUN" == "1" ]]; then
-  log "  ${BLUE}[DRY RUN]${RESET} $CHANGED change(s) would be applied"
-else
-  log "  ${GREEN}✓${RESET} $CHANGED change(s) applied"
-  [[ "$CHANGED" -gt 0 ]] && log "  Backup saved at: $BACKUP_FILE"
-fi
-log "  ${BLUE}→${RESET} $SKIPPED already-OK setting(s) skipped"
-[[ "$ERRORS" -gt 0 ]] && log "  ${RED}✗${RESET} $ERRORS error(s)"
-log ""
-log "  ${YELLOW}Next steps:${RESET}"
-log "  1. Run ./audit.sh to verify the hardening applied"
-log "  2. Restart OpenClaw if any config changes were made"
-log "  3. Review manual suggestions above"
+log "  Run ${BOLD}./audit.sh${RESET} to verify everything looks good."
 log ""
 
 [[ "$ERRORS" -gt 0 ]] && exit 2

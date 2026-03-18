@@ -19,6 +19,24 @@ bash ~/.openclaw-safe/audit.sh
 
 ---
 
+## How It Works
+
+New to OpenClaw? Here's what happens when you run the one-liner:
+
+**1. Install** — Downloads `openclaw-safe` to your machine (one folder, nothing permanent)
+
+**2. Audit** — Scans your OpenClaw install and checks for common security gaps. Things like: are your config files locked down? Can agents run shell commands without asking you first? Are you on a vulnerable version?
+
+**3. Fix** — `harden.sh` asks you before changing anything. It shows you exactly what it found and what it plans to do. You say yes, it fixes it. Simple.
+
+**4. Clean report** — Run `audit.sh` again and see a wall of ✅. That's the goal.
+
+You don't need to know what `plugins.allow` means or what `exec.ask` does. The tool finds the problems and fixes them. If something needs your judgment, it asks.
+
+> 💡 Not sure what to do? Just run `./harden.sh` and follow the prompts. It won't change anything without your OK.
+
+---
+
 ## What It Does
 
 | Script | Purpose | Exit Code |
