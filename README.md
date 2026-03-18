@@ -312,6 +312,24 @@ Everything requires a `[y/N]` confirmation. Nothing changes silently.
 
 ---
 
+## Install as an OpenClaw Skill
+
+If you want openclaw-safe available as a native skill in any OpenClaw agent:
+
+```bash
+# Copy the skill to your OpenClaw skills directory
+cp -r ~/projects/openclaw-safe/skill ~/.openclaw/skills/openclaw-safe
+```
+
+Once installed, your agent understands:
+- *"audit my OpenClaw"* — runs a full security scan
+- *"secure my OpenClaw"* — runs the full setup wizard
+- *"harden my OpenClaw"* — applies config hardening automatically
+- *"scan my skills"* — checks installed skills for malicious code
+- *"start security monitor"* — starts real-time monitoring
+
+---
+
 ## Contributing
 
 Found a bug? Know a check we're missing? Open an issue or PR.

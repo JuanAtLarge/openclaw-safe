@@ -19,12 +19,6 @@ except:
     print('')
 " 2>/dev/null || true)
 
-if [[ -z "$CHAT_ID" ]]; then
-    echo "⚠ Could not determine your Telegram chat ID."
-    echo "  Make sure OpenClaw is paired with Telegram, then retry."
-    exit 1
-fi
-
 mkdir -p "$SAFE_DIR"
 
 # ─── Load bot token ──────────────────────────────────────────────────────────
@@ -38,13 +32,57 @@ except:
     print('')
 " 2>/dev/null || true)
 
-if [[ -z "$BOT_TOKEN" ]]; then
-    echo "⚠ No Telegram bot token found in openclaw.json"
-    echo "  Run the setup steps manually:"
-    echo "  1. bash harden.sh"
-    echo "  2. bash scan-skills.sh"
-    echo "  3. bash monitor.sh start"
-    echo "  4. bash install-clawsec.sh"
+# ─── Terminal fallback wizard ────────────────────────────────────────────────
+if [[ -z "$BOT_TOKEN" ]] || [[ -z "$CHAT_ID" ]]; then
+    echo ""
+    echo "🦙 openclaw-safe Setup Wizard (Terminal Mode)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # Show audit results
+    bash "$SCRIPT_DIR/audit.sh"
+    echo ""
+
+    # Helper: ask a yes/no question
+    ask_terminal() {
+        local prompt="$1"
+        echo -n "  $prompt [y/N]: "
+        read -r answer
+        [[ "${answer,,}" == "y" || "${answer,,}" == "yes" ]]
+    }
+
+    # Step 2: Harden
+    harden_issues=$(bash "$SCRIPT_DIR/harden.sh" --dry-run 2>&1 | grep -c '→' || echo 0)
+    if [[ "$harden_issues" -gt 0 ]]; then
+        if ask_terminal "Fix config settings automatically? (backs up first)"; then
+            echo "y" | bash "$SCRIPT_DIR/harden.sh"
+            echo "  ✅ Config hardened!"
+        fi
+    else
+        echo "  ✅ Config already clean — nothing to fix"
+    fi
+    echo ""
+
+    # Step 3: Scan skills
+    if ask_terminal "Scan installed skills for malicious code?"; then
+        bash "$SCRIPT_DIR/scan-skills.sh"
+    fi
+    echo ""
+
+    # Step 4: Monitor
+    if ask_terminal "Start real-time memory file monitor?"; then
+        bash "$SCRIPT_DIR/monitor.sh" start
+        echo "  ✅ Monitor started!"
+    fi
+    echo ""
+
+    # Step 5: ClawSec
+    if ask_terminal "Install ClawSec (free real-time protection)?"; then
+        bash "$SCRIPT_DIR/install-clawsec.sh"
+    fi
+    echo ""
+
+    echo "🎉 Setup complete! Run 'bash audit.sh' anytime to check your status."
     exit 0
 fi
 
