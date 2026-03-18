@@ -56,6 +56,17 @@ When agents delegate to other agents or external MCP servers, there's no mutual 
 
 ---
 
+## What These Tools Do
+
+Two free tools that work alongside openclaw-safe — we recommend both:
+
+- **ClawSec** (by Prompt Security): scans your OpenClaw config and running session for known prompt injection patterns and dangerous tool configurations. One-command install, no account required.
+- **ghost-scan** (by JuanAtLarge): checks your installed skills' JavaScript files for invisible Unicode characters that malicious actors hide in code to smuggle in secret instructions. Works via `npx` with no install needed.
+
+Run `install-clawsec.sh` for ClawSec. ghost-scan runs automatically inside `scan-skills.sh`.
+
+---
+
 ## What's Included
 
 | Script | What It Does |
@@ -63,9 +74,10 @@ When agents delegate to other agents or external MCP servers, there's no mutual 
 | `install.sh` | One-liner entry point — clones repo + runs audit |
 | `audit.sh` | Full security scan with color output, Security Score (0-100), + saves dated report |
 | `harden.sh` | Applies safe defaults automatically (with confirmation + backup) |
-| `scan-skills.sh` | Static analysis of installed skills (`--all` to include built-ins) + optional VirusTotal scan |
+| `scan-skills.sh` | Static analysis of installed skills (`--all` to include built-ins) + ghost-scan Unicode detection + optional VirusTotal scan |
 | `monitor.sh` | Real-time daemon watching memory files for prompt injection attempts |
 | `install-clawsec.sh` | Installs ClawSec (free, from Prompt Security) |
+| `quarantine.sh` | Manage quarantined skills — list, restore, or permanently delete |
 
 | Doc | What It Covers |
 |-----|---------------|
