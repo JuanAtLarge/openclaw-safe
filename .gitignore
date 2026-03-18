@@ -12,3 +12,6 @@ openclaw.json
 config.json
 *.bak
 .DS_Store
+audit-results/*.md
+audit-results/!.gitkeep
+audit-results/*.md
