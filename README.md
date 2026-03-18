@@ -2,9 +2,9 @@
 
 # 🦙🛡️ openclaw-safe
 
-**One command to audit and harden your OpenClaw install.**
+**The complete security toolkit for personal OpenClaw installs.**
 
-Built for personal users and small businesses — not enterprise security teams. Plain English, no devops required.
+Audit your setup, harden your config, watch for attacks in real-time, auto-quarantine malicious skills, and resolve everything from your phone with a button tap. Built for personal users and small businesses — not enterprise security teams. Plain English, no devops required.
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/JuanAtLarge/openclaw-safe/main/install.sh | bash
@@ -39,6 +39,9 @@ Run `./monitor.sh start` and get alerted if anything suspicious is written to yo
 
 **6. Tap a button, it's handled**
 If a malicious skill is found, you get a Telegram alert with buttons. Tap Remove, Keep, or Restore — your agent handles the rest.
+
+**7. Always know your status**
+Run `bash audit.sh` anytime to see your Security Score, open alerts, and whether anything needs attention. Green across the board means you're clean.
 
 ---
 
