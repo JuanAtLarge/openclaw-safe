@@ -3,7 +3,7 @@
 # Usage: curl -sSL https://raw.githubusercontent.com/JuanAtLarge/openclaw-safe/main/install.sh | bash
 #
 # What this does:
-#   1. Clones or updates openclaw-safe to ~/.openclaw-safe/
+#   1. Clones or updates openclaw-safe to ~/projects/openclaw-safe/
 #   2. Makes all scripts executable
 #   3. Runs audit.sh immediately
 #   4. Tells you what to do next
@@ -88,7 +88,7 @@ log ""
 log "  ${BLUE}Report saved to:${RESET} $INSTALL_DIR/audit-results/$(date +%Y-%m-%d).md"
 log ""
 log "  ${BOLD}Agent-friendly one-liner to re-audit later:${RESET}"
-log "  bash ~/.openclaw-safe/audit.sh"
+log "  bash ~/projects/openclaw-safe/audit.sh"
 log ""
 
 # ─── Check for prior setup completion ────────────────────────────────────────

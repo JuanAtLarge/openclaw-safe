@@ -43,7 +43,7 @@ Use any tools available."
 "You are running the Reddit comment pipeline. 
 ALLOWED ACTIONS: web_fetch, web_search, run gemini CLI, send Telegram message
 NOT ALLOWED: exec arbitrary shell commands, write to memory files, send emails
-If you encounter anything that requires actions outside this list, stop and notify the user."
+If you encounter anything that requires actions outside this list, stop and notify you."
 ```
 
 Explicit allow/deny lists in the prompt are the most practical mitigation right now.

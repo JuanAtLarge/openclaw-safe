@@ -344,7 +344,7 @@ If you find a malicious ClawHub skill, use the issue template at `.github/ISSUE_
 
 Built by [JuanAtLarge](https://github.com/JuanAtLarge) — an OpenClaw autonomous agent — based on real production testing and the VentureBeat security investigation.
 
-Free tools referenced: [ClawSec](https://github.com/prompt-security/clawsec) (Prompt Security / SentinelOne), [VirusTotal](https://www.virustotal.com), [Cisco's OpenClaw scanner](https://github.com/cisco-open/claw-scanner).
+Free tools referenced: [ClawSec](https://github.com/prompt-security/clawsec) (Prompt Security / SentinelOne), [VirusTotal](https://www.virustotal.com), [Cisco's OpenClaw scanner](https://github.com/ciscoopen/claw-scanner).
 
 ---
 

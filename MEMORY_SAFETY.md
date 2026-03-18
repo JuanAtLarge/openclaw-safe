@@ -66,7 +66,7 @@ grep -r "remember\|instruction\|password\|token\|email\|send to" ~/.openclaw/wor
 
 ```bash
 # Check for unusual keys in your state files
-cat ~/projects/your-project/twitter-state.json | python3 -m json.tool
+cat ~/projects/your-project/state.json | python3 -m json.tool
 cat ~/projects/your-reddit-cron/state.json | python3 -m json.tool
 ```
 

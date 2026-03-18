@@ -39,7 +39,7 @@ For each `✓ ready` skill, note:
 **Personal skills:**
 - `find-skills` — (from `~/.agents/skills/`) — helps discover installable skills
 
-**Assessment:** Current skill inventory looks clean. All bundled skills, no ClawHub installs detected. The personal `find-skills` skill should be reviewed periodically since it's outside the bundled path.
+**Assessment:** Current skill inventory looks clean. All bundled skills, no ClawHub installs detected. User-installed skills from outside the bundled path should be reviewed periodically.
 
 ---
 
@@ -119,9 +119,9 @@ npm install -g clawsec
 
 **Command to scan a skill before installing:**
 ```bash
-# Download but don't install, then scan
-clawhub download <skill-name> --no-install
-clawsec scan ~/.clawhub/cache/<skill-name>/
+# Clone the skill repo and scan before installing
+git clone https://github.com/<author>/<skill-name> ~/.clawhub/preview/<skill-name>
+bash ~/projects/openclaw-safe/scan-skills.sh  # then review manually
 ```
 
 ---
