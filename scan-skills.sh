@@ -23,8 +23,17 @@ TOTAL=0
 PASS=0
 WARN=0
 FAIL=0
+BUILTIN_SCANNED=0
+USER_SCANNED=0
 
-BUILTIN_SKILLS="${HOME}/.npm-global/lib/node_modules/openclaw/skills"
+# Built-in skills paths: macOS (npm-global) or Linux (/usr/local)
+if [[ -d "${HOME}/.npm-global/lib/node_modules/openclaw/skills" ]]; then
+  BUILTIN_SKILLS="${HOME}/.npm-global/lib/node_modules/openclaw/skills"
+elif [[ -d "/usr/local/lib/node_modules/openclaw/skills" ]]; then
+  BUILTIN_SKILLS="/usr/local/lib/node_modules/openclaw/skills"
+else
+  BUILTIN_SKILLS=""
+fi
 USER_SKILLS="${HOME}/.agents/skills"
 VT_KEY="${VIRUSTOTAL_API_KEY:-}"
 
@@ -69,6 +78,7 @@ scan_code_file() {
 
 scan_skill() {
   local skill_dir="$1"
+  local label="${2:-}"   # optional label e.g. "[built-in]"
   local skill_name
   skill_name=$(basename "$skill_dir")
   local -a skill_issues=()
@@ -87,11 +97,14 @@ scan_skill() {
 
   TOTAL=$((TOTAL+1))
 
+  local label_suffix=""
+  [[ -n "$label" ]] && label_suffix=" ${BLUE}${label}${RESET}"
+
   if [[ ${#skill_issues[@]} -eq 0 ]]; then
-    log "  ${GREEN}✓ PASS${RESET}  $skill_name (${file_count} code file(s) scanned)"
+    log "  ${GREEN}✓ PASS${RESET}  $skill_name${label_suffix} (${file_count} code file(s) scanned)"
     PASS=$((PASS+1))
   else
-    log "  ${YELLOW}⚠ WARN${RESET}  $skill_name"
+    log "  ${YELLOW}⚠ WARN${RESET}  $skill_name${label_suffix}"
     # Deduplicate and show top 5
     local seen=()
     local count=0
@@ -150,7 +163,10 @@ if [[ -d "$USER_SKILLS" ]]; then
   USER_SKILL_COUNT=$(ls -1 "$USER_SKILLS" 2>/dev/null | wc -l | tr -d ' ')
   if [[ "$USER_SKILL_COUNT" -gt 0 ]]; then
     for skill_dir in "$USER_SKILLS"/*/; do
-      [[ -d "$skill_dir" ]] && scan_skill "$skill_dir"
+      if [[ -d "$skill_dir" ]]; then
+        scan_skill "$skill_dir" ""
+        USER_SCANNED=$((USER_SCANNED+1))
+      fi
     done
   else
     log "  ${BLUE}ℹ${RESET} No user-installed skills found"
@@ -161,17 +177,22 @@ fi
 
 # ─── Optionally scan built-in skills ─────────────────────────────────────────
 if [[ "$SCAN_ALL" == "1" ]]; then
-  section "Built-in Skills (--all mode)"
-  if [[ -d "$BUILTIN_SKILLS" ]]; then
+  section "Built-in OpenClaw Skills (--all)"
+  if [[ -n "$BUILTIN_SKILLS" && -d "$BUILTIN_SKILLS" ]]; then
+    log "  ${BLUE}ℹ${RESET} Scanning: $BUILTIN_SKILLS"
     for skill_dir in "$BUILTIN_SKILLS"/*/; do
-      [[ -d "$skill_dir" ]] && scan_skill "$skill_dir"
+      if [[ -d "$skill_dir" ]]; then
+        scan_skill "$skill_dir" "[built-in]"
+        BUILTIN_SCANNED=$((BUILTIN_SCANNED+1))
+      fi
     done
   else
-    log "  ${BLUE}ℹ${RESET} Built-in skills directory not found"
+    log "  ${BLUE}ℹ${RESET} Built-in skills directory not found (tried: ~/.npm-global/lib/node_modules/openclaw/skills and /usr/local/lib/node_modules/openclaw/skills)"
   fi
 else
   log ""
-  log "  ${BLUE}ℹ${RESET} Run with --all to also scan built-in skills (${BUILTIN_SKILLS})"
+  log "  ${BLUE}ℹ${RESET} Run with --all to also scan built-in OpenClaw skills"
+  [[ -n "$BUILTIN_SKILLS" ]] && log "  ${BLUE}ℹ${RESET} Built-in skills path: ${BUILTIN_SKILLS}"
 fi
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
@@ -183,6 +204,10 @@ log "  Total scanned:  $TOTAL"
 log "  ${GREEN}✓ Pass:${RESET}         $PASS"
 log "  ${YELLOW}⚠ Warnings:${RESET}     $WARN"
 log "  ${RED}✗ Critical:${RESET}     $FAIL"
+if [[ "$SCAN_ALL" == "1" ]]; then
+  log ""
+  log "  ${BLUE}ℹ${RESET} $BUILTIN_SCANNED built-in skills scanned, $USER_SCANNED user skills scanned"
+fi
 log ""
 
 if [[ "$FAIL" -gt 0 ]]; then

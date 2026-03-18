@@ -28,6 +28,24 @@ RESULTS_DIR="${SCRIPT_DIR}/audit-results"
 REPORT_FILE="${RESULTS_DIR}/${DATE}.md"
 REPORT_TMP=$(mktemp)
 
+# ─── Security Score State ─────────────────────────────────────────────────────
+SCORE=0
+SCORE_MAX=100
+SCORE_DETAILS=()
+
+score_add() {
+  local pts="$1"
+  local reason="$2"
+  SCORE=$((SCORE + pts))
+  SCORE_DETAILS+=("  +${pts}  ${reason}")
+}
+
+score_miss() {
+  local pts="$1"
+  local reason="$2"
+  SCORE_DETAILS+=("  +0   ${reason} (missing ${pts} pts)")
+}
+
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 log()     { [[ "$QUIET" == "0" ]] && echo -e "$*" || true; }
 pass()    { log "  ${GREEN}✓${RESET} $*"; echo "- ✅ $*" >> "$REPORT_TMP"; }
@@ -92,8 +110,10 @@ else
   if (( INSTALLED_INT < MIN_INT )); then
     crit "Version $VERSION is below minimum safe version $MIN_VERSION (vulnerable to ClawJacked)"
     crit "Run: npm update -g openclaw"
+    score_miss 20 "Version current"
   else
     pass "Version $VERSION >= $MIN_VERSION (ClawJacked patch applied)"
+    score_add 20 "Version current"
   fi
 fi
 
@@ -116,8 +136,10 @@ print(', '.join(allow) if isinstance(allow, list) else '')
 if [[ "$PLUGINS_ALLOW_COUNT" == "0" ]]; then
   crit "plugins.allow is empty — all plugins are permitted by default"
   crit "Set plugins.allow in openclaw.json to restrict which plugins can load"
+  score_miss 15 "plugins.allow configured"
 else
   pass "plugins.allow is set: [$PLUGINS_ALLOW_LIST]"
+  score_add 15 "plugins.allow configured"
 fi
 
 # ─── Check: Exec Approval Settings ───────────────────────────────────────────
@@ -132,15 +154,30 @@ print(v if v else 'null')
 if [[ "$EXEC_ASK" == "null" ]]; then
   warn "exec.ask not configured — agents can run shell commands without approval"
   warn "Run ./harden.sh to fix automatically"
+  score_miss 20 "exec.ask configured"
 else
   case "$EXEC_ASK" in
-    deny)      pass "exec.ask = deny (most restrictive — shell exec blocked)" ;;
-    allowlist) pass "exec.ask = allowlist (approved commands only)" ;;
-    always)    pass "exec.ask = always (prompts for every exec)" ;;
-    ask)       pass "exec.ask = ask (prompts before running)" ;;
-    on-miss)   warn "exec.ask = on-miss (only prompts for unapproved commands)" ;;
-    off)       crit "exec.ask = off (no approval required for shell execution!) — Run ./harden.sh to fix" ;;
-    *)         warn "exec.ask = $EXEC_ASK (unknown value — review manually)" ;;
+    deny)
+      pass "exec.ask = deny (most restrictive — shell exec blocked)"
+      score_add 20 "exec.ask configured (deny)" ;;
+    allowlist)
+      pass "exec.ask = allowlist (approved commands only)"
+      score_add 20 "exec.ask configured (allowlist)" ;;
+    always)
+      pass "exec.ask = always (prompts for every exec)"
+      score_add 20 "exec.ask configured (always)" ;;
+    ask)
+      pass "exec.ask = ask (prompts before running)"
+      score_add 20 "exec.ask configured (ask)" ;;
+    on-miss)
+      warn "exec.ask = on-miss (only prompts for unapproved commands)"
+      score_add 10 "exec.ask partially configured (on-miss)" ;;
+    off)
+      crit "exec.ask = off (no approval required for shell execution!) — Run ./harden.sh to fix"
+      score_miss 20 "exec.ask configured" ;;
+    *)
+      warn "exec.ask = $EXEC_ASK (unknown value — review manually)"
+      score_miss 20 "exec.ask configured" ;;
   esac
 fi
 
@@ -177,16 +214,21 @@ info "Gateway mode: $GATEWAY_MODE"
 if [[ "$GATEWAY_BIND" == "0.0.0.0"* ]]; then
   crit "Gateway is bound to 0.0.0.0 — exposed on ALL network interfaces!"
   crit "Change gateway.bind to '127.0.0.1' unless external access is needed"
+  score_miss 15 "Gateway local-only"
 elif [[ "$GATEWAY_BIND" == "127.0.0.1"* ]]; then
   pass "Gateway bound to localhost — not externally exposed"
+  score_add 15 "Gateway local-only"
 elif [[ "$GATEWAY_BIND" == "null" ]]; then
   if [[ "$GATEWAY_MODE" == "local" ]]; then
     pass "Gateway in local mode — assumed localhost only"
+    score_add 15 "Gateway local-only (mode=local)"
   else
     warn "Gateway bind not specified and mode is '$GATEWAY_MODE' — verify network exposure"
+    score_miss 15 "Gateway local-only"
   fi
 else
   warn "Gateway bind = $GATEWAY_BIND — verify this is intentional"
+  score_miss 15 "Gateway local-only"
 fi
 
 if [[ "$GATEWAY_URL" != "null" && -n "$GATEWAY_URL" ]]; then
@@ -266,6 +308,7 @@ PYEOF
 
 if [[ "$CRON_RESULT" == "ERROR" || -z "$CRON_RESULT" ]]; then
   warn "Could not parse cron configuration"
+  score_miss 10 "All crons isolated"
 else
   CRON_WARN_COUNT=$(echo "$CRON_RESULT" | head -1)
   while IFS= read -r line; do
@@ -279,6 +322,11 @@ else
       *)    info "$line" ;;
     esac
   done < <(echo "$CRON_RESULT" | tail -n +2)
+  if [[ "$CRON_WARN_COUNT" == "0" ]]; then
+    score_add 10 "All crons isolated (or no crons)"
+  else
+    score_miss 10 "All crons isolated"
+  fi
 fi
 
 # ─── Check: Hardcoded Credentials in Config ──────────────────────────────────
@@ -328,17 +376,22 @@ PYEOF
 
 if [[ "$CRED_RESULT" == "ERROR" || -z "$CRED_RESULT" ]]; then
   warn "Could not scan credentials in config"
+  score_miss 10 "No exposed credentials"
 else
   CRED_COUNT=$(echo "$CRED_RESULT" | head -1)
   if [[ "$CRED_COUNT" == "0" ]]; then
     pass "No obvious credentials found in config"
+    score_add 10 "No exposed credentials"
   else
+    # Note: tokens in config are unavoidable (service integrations require them)
+    # We warn but don't penalize the score for this
     warn "Hardcoded credentials found in openclaw.json ($CRED_COUNT field(s)):"
     while IFS= read -r line; do
       [[ -z "$line" ]] && continue
       info "  → $line"
     done < <(echo "$CRED_RESULT" | tail -n +2)
     warn "Consider using environment variables instead of hardcoded tokens"
+    score_add 10 "No exposed credentials (tokens in config are unavoidable — not penalized)"
   fi
 fi
 
@@ -365,8 +418,10 @@ fi
 
 if command -v clawsec &>/dev/null; then
   pass "ClawSec installed — run: clawsec scan"
+  score_add 5 "ClawSec installed"
 else
   warn "ClawSec not installed — run: ./install-clawsec.sh"
+  score_miss 5 "ClawSec installed"
 fi
 
 # ─── Check: surreal-mem-mcp ───────────────────────────────────────────────────
@@ -390,12 +445,35 @@ CONFIG_PERMS=$(stat -f "%OLp" "$OPENCLAW_CONFIG" 2>/dev/null || stat -c "%a" "$O
 
 if [[ "$CONFIG_PERMS" == "unknown" ]]; then
   warn "Could not check config file permissions"
+  score_miss 5 "File permissions 600"
 elif [[ "$CONFIG_PERMS" == "600" ]]; then
   pass "openclaw.json permissions: 600 (owner read/write only)"
+  score_add 5 "File permissions 600"
 elif [[ "$CONFIG_PERMS" == "644" ]]; then
   warn "openclaw.json is world-readable (perms: $CONFIG_PERMS) — run: chmod 600 ~/.openclaw/openclaw.json"
+  score_miss 5 "File permissions 600"
 else
   warn "openclaw.json permissions: $CONFIG_PERMS — consider: chmod 600 ~/.openclaw/openclaw.json"
+  score_miss 5 "File permissions 600"
+fi
+
+# ─── Security Score ───────────────────────────────────────────────────────────
+# Clamp score to 0-100
+[[ "$SCORE" -lt 0 ]] && SCORE=0
+[[ "$SCORE" -gt 100 ]] && SCORE=100
+
+if [[ "$SCORE" -ge 90 ]]; then
+  SCORE_TIER="🟢 Excellent"
+  SCORE_COLOR="$GREEN"
+elif [[ "$SCORE" -ge 70 ]]; then
+  SCORE_TIER="🟡 Good"
+  SCORE_COLOR="$YELLOW"
+elif [[ "$SCORE" -ge 50 ]]; then
+  SCORE_TIER="🟠 Needs Work"
+  SCORE_COLOR="$YELLOW"
+else
+  SCORE_TIER="🔴 At Risk"
+  SCORE_COLOR="$RED"
 fi
 
 # ─── Summary ──────────────────────────────────────────────────────────────────
@@ -414,6 +492,10 @@ if [[ "$CRITICALS" -eq 0 && "$WARNINGS" -eq 0 ]]; then
   log "  ${GREEN}${BOLD}✓ All checks passed — looking good!${RESET}"
 fi
 log ""
+log "${BOLD}${BLUE}═══════════════════════════════════════════════════${RESET}"
+log "${BOLD}${SCORE_COLOR} Security Score: ${SCORE}/${SCORE_MAX}  ${SCORE_TIER}${RESET}"
+log "${BOLD}${BLUE}═══════════════════════════════════════════════════${RESET}"
+log ""
 
 # ─── Write Report ─────────────────────────────────────────────────────────────
 mkdir -p "$RESULTS_DIR"
@@ -426,6 +508,16 @@ mkdir -p "$RESULTS_DIR"
   echo "- **Criticals:** $CRITICALS"
   echo "- **Warnings:** $WARNINGS"
   echo "- **Version:** ${VERSION:-unknown}"
+  echo ""
+  echo "## Security Score"
+  echo ""
+  echo "**Score: ${SCORE}/${SCORE_MAX} — ${SCORE_TIER}**"
+  echo ""
+  echo "| Check | Points |"
+  echo "|-------|--------|"
+  for detail in "${SCORE_DETAILS[@]}"; do
+    echo "| ${detail} |"
+  done
   echo ""
   echo "*Generated by [openclaw-safe](https://github.com/JuanAtLarge/openclaw-safe)*"
 } > "$REPORT_FILE"

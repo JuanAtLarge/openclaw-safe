@@ -1,3 +1,5 @@
+[![CI](https://github.com/JuanAtLarge/openclaw-safe/actions/workflows/ci.yml/badge.svg)](https://github.com/JuanAtLarge/openclaw-safe/actions/workflows/ci.yml)
+
 # 🦙🛡️ openclaw-safe
 
 **One command to audit and harden your OpenClaw install.**
@@ -30,7 +32,10 @@ Color-coded output shows what's good ✅, what's a warning ⚠️, and what's cr
 Run `./harden.sh` and it applies safe defaults for you — with a confirmation prompt before touching anything. Your config is backed up first.
 
 **4. Get a clean report**
-A dated markdown report is saved to `audit-results/` every time you run.
+A dated markdown report is saved to `audit-results/` every time you run — including a Security Score.
+
+**5. Watch your memory files in real-time**
+Run `./monitor.sh start` and get alerted if anything suspicious is written to your agent's memory.
 
 ---
 
@@ -56,9 +61,10 @@ When agents delegate to other agents or external MCP servers, there's no mutual 
 | Script | What It Does |
 |--------|-------------|
 | `install.sh` | One-liner entry point — clones repo + runs audit |
-| `audit.sh` | Full 8-check security scan with color output + saves dated report |
+| `audit.sh` | Full security scan with color output, Security Score (0-100), + saves dated report |
 | `harden.sh` | Applies safe defaults automatically (with confirmation + backup) |
-| `scan-skills.sh` | Static analysis of installed skills + optional VirusTotal scan |
+| `scan-skills.sh` | Static analysis of installed skills (`--all` to include built-ins) + optional VirusTotal scan |
+| `monitor.sh` | Real-time daemon watching memory files for prompt injection attempts |
 | `install-clawsec.sh` | Installs ClawSec (free, from Prompt Security) |
 
 | Doc | What It Covers |
@@ -82,6 +88,49 @@ When agents delegate to other agents or external MCP servers, there's no mutual 
 - ✅ Credential exposure in config files
 - ✅ Installed skill inventory
 - ✅ File permissions on sensitive config
+- ✅ **Security Score: 0-100** — see exactly where you stand
+
+### Security Score
+
+Every audit ends with a scored summary:
+
+```
+═══════════════════════════════════════
+ Security Score: 95/100  🟢 Excellent
+═══════════════════════════════════════
+```
+
+| Tier | Score | What It Means |
+|------|-------|---------------|
+| 🟢 Excellent | 90-100 | Strong posture — minor gaps only |
+| 🟡 Good | 70-89 | Solid base, a few things to fix |
+| 🟠 Needs Work | 50-69 | Multiple gaps open, act soon |
+| 🔴 At Risk | < 50 | Significant exposure — run `./harden.sh` now |
+
+---
+
+## monitor.sh — Real-Time Memory Watcher
+
+Prompt injection attacks often target your agent's memory files. `monitor.sh` watches them in real-time.
+
+```bash
+./monitor.sh start    # start background daemon
+./monitor.sh status   # check status + alert count
+./monitor.sh tail     # live log view
+./monitor.sh stop     # stop daemon
+```
+
+**What it catches:**
+- Instruction-like language written to memory files (`"ignore previous"`, `"from now on"`, `"you are now"`, etc.)
+- Embedded URLs that appear in memory files unexpectedly
+- Rapid writes (>5 changes in 60 seconds) — possible injection loop
+- New files created in `memory/`
+
+**How it works:**
+- Uses `fswatch` on macOS if installed (real-time), `inotifywait` on Linux, falls back to 30s polling
+- Logs to `~/.openclaw-safe/monitor.log`
+- Optionally sends alerts via `openclaw message` if available
+- Never modifies any files — read-only watching
 
 ---
 
@@ -102,6 +151,7 @@ Everything requires a `[y/N]` confirmation. Nothing changes silently.
 - macOS or Linux
 - OpenClaw installed
 - `node` and `python3` (standard on any OpenClaw machine)
+- Optional: `fswatch` (macOS: `brew install fswatch`) for real-time monitoring
 - Optional: `VIRUSTOTAL_API_KEY` env var for skill scanning
 
 ---
