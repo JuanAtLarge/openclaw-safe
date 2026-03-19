@@ -37,7 +37,9 @@ fi
 if [[ -d "$INSTALL_DIR/.git" ]]; then
   log "${BLUE}ℹ Updating openclaw-safe...${RESET}"
   cd "$INSTALL_DIR"
-  git pull --quiet
+  git fetch --quiet origin
+  git branch --set-upstream-to=origin/main main 2>/dev/null || true
+  git pull --quiet origin main
   log "${GREEN}✓ Updated to latest${RESET}"
 else
   log "${BLUE}ℹ Installing openclaw-safe to $INSTALL_DIR...${RESET}"
